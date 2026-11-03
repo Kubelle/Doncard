@@ -46,14 +46,52 @@ function groups(adj){let visited=new Set(),out=[];for(let i=0;i<9;i++){if(!state
 function eligibleTargets(source,group,adj){return adj[source].filter(i=>group.includes(i)&&(()=>{let d=defs[state.board[source].id],t=defs[state.board[i].id];return !d.target||t.id===d.target})())}
 function contractId(){return state.activeContract?.id||null}
 function handLimit(){return contractId()==='family'?11:9}
-function scoreGroup(group,adj){let inf=0,res=0;const entries=group.map(i=>({i,c:state.board[i],d:defs[state.board[i].id]}));for(let {d} of entries){inf+=d.inf;res+=d.res;if(d.bankRes)res+=Math.floor(state.bank/100)*d.bankRes;if(d.lawyerRes&&entries.some(e=>e.c.id==='george'))res+=d.lawyerRes}
-const mafias=entries.filter(e=>e.c.id==='mafia').length;
-if(entries.some(e=>e.c.id==='vitto'))inf+=mafias*entries.filter(e=>e.c.id==='vitto').length;
-if(entries.some(e=>e.c.id==='andy'))res+=mafias*entries.filter(e=>e.c.id==='andy').length;
-for(let {i,c,d} of entries){if(d.allAdjRes){let count=adj[i].filter(j=>group.includes(j)).length;res+=count*d.allAdjRes;}if(d.target){let candidates=eligibleTargets(i,group,adj);let chosen=state.targets[c.uid];if(candidates.length&&candidates.some(j=>state.board[j].uid===chosen)){inf+=d.dv||0;res+=d.dr||0;}else if(candidates.length){ // Preview bonus at its best possible recipient; explicit player confirmation still required before scoring.
-inf+=d.dv||0;res+=d.dr||0;
-}}}
-return {group,inf,res,score:inf*res};}
+function buildScoreSteps(group,adj){
+  const entries=group.slice().sort((a,b)=>a-b).map(i=>({i,c:state.board[i],d:defs[state.board[i].id]}));
+  const infBy=new Map(entries.map(e=>[e.i,0])),resBy=new Map(entries.map(e=>[e.i,0]));
+  const steps=[],mafias=entries.filter(e=>e.c.id==='mafia'),contract=contractId(),repeat=contract==='cigars'?2:1;
+  function add(phase,i,amount,label,source=null,factor=null){
+    if(!amount)return;
+    steps.push({phase,i,amount,label,source,factor});
+    if(i!==null){const map=phase==='inf'?infBy:resBy;map.set(i,(map.get(i)||0)+amount)}
+  }
+  const targetFor=e=>{let opts=eligibleTargets(e.i,group,adj);return opts.find(j=>state.board[j].uid===state.targets[e.c.uid])??opts[0]};
+  for(const e of entries)add('inf',e.i,e.d.inf,'Základní vliv');
+  for(const e of entries){
+    if(e.c.id==='vitto')for(const m of mafias)add('inf',m.i,repeat,'Vitto Vertillo',e.i);
+    if(e.d.target&&e.d.dv){let t=targetFor(e);if(t!==undefined)add('inf',t,e.d.dv,e.d.name,e.i)}
+  }
+  if(contract==='smuggling')for(const m of mafias)add('inf',m.i,1,'Pašování cigaret','contract');
+  if(contract==='heist')for(const m of mafias)add('inf',m.i,mafias.length,'Noční vykrádačka','contract');
+  for(const e of entries)if(e.d.multInf){
+    let t=targetFor(e);if(t!==undefined)add('inf',t,(infBy.get(t)||0)*(e.d.multInf-1),e.d.name,e.i,e.d.multInf)
+  }
+  for(const e of entries)add('res',e.i,e.d.res,'Základní respekt');
+  for(const e of entries){
+    if(e.c.id==='andy')for(const m of mafias)add('res',m.i,repeat,'Andy Magnus',e.i);
+    if(e.d.bankRes)add('res',e.i,Math.floor(state.bank/100)*e.d.bankRes,e.d.name,e.i);
+    if(e.d.lawyerRes&&entries.some(x=>x.c.id==='george'))add('res',e.i,e.d.lawyerRes,e.d.name,e.i);
+    if(e.d.allAdjRes)for(const j of adj[e.i].filter(j=>group.includes(j)))add('res',j,e.d.allAdjRes,e.d.name,e.i);
+    if(e.d.target&&e.d.dr){let t=targetFor(e);if(t!==undefined)add('res',t,e.d.dr,e.d.name,e.i)}
+  }
+  for(const e of entries)if(e.d.multRes){
+    let t=targetFor(e);if(t!==undefined)add('res',t,(resBy.get(t)||0)*(e.d.multRes-1),e.d.name,e.i,e.d.multRes)
+  }
+  if(contract==='alcohol'){
+    const links=[];for(let i of group)for(let n of neighbors(i)){
+      if(n.index>i&&group.includes(n.index)&&cardEdges(state.board[i])[n.dir]==='whiskey'&&cardEdges(state.board[n.index])[n.other]==='whiskey')links.push([i,n.index])
+    }
+    let total=[...resBy.values()].reduce((a,b)=>a+b,0);
+    for(const _ of links){let bonus=total*0.5;add('res',null,bonus,'Dodávka alkoholu','contract',1.5);total+=bonus}
+  }
+  return steps
+}
+function scoreGroup(group,adj){
+  const steps=buildScoreSteps(group,adj);
+  const inf=steps.reduce((a,x)=>a+(x.phase==='inf'?x.amount:0),0);
+  const res=steps.reduce((a,x)=>a+(x.phase==='res'?x.amount:0),0);
+  return {group,inf,res,score:Math.round(inf*res)}
+}
 function calc(){let adj=graph();let gs=groups(adj).map(g=>scoreGroup(g,adj)).sort((a,b)=>b.score-a.score||b.group.length-a.group.length||Math.min(...a.group)-Math.min(...b.group));return {adj,best:gs[0]||{group:[],inf:0,res:0,score:0},groups:gs}}
 function edge(type,side){return `<span class="edge ${side}" style="--edge:${TYPES[type].color}" title="${TYPES[type].label}"><svg viewBox="0 0 24 24" aria-hidden="true">${SVG[type]}</svg></span>`}
 function cardHtml(c){let d=defs[c.id];return `<div class="card" title="${d.effect}"><div class="kind">${d.kind}</div><div class="name">${d.name}</div><div class="subtitle">${d.sub}</div><div class="values"><span>Vliv <b>${d.inf}</b></span><span>Respekt <b>${d.res}</b></span></div>${cardEdges(c).map((e,i)=>edge(e,['top','right','bottom','left'][i])).join('')}</div>`}
@@ -90,39 +128,9 @@ $('replace').addEventListener('click',()=>{if(!state.swapMode||!state.swapSelect
 $('autofill').addEventListener('click',()=>{state.board.forEach((c,i)=>{if(!c&&state.hand.length)state.board[i]=state.hand.shift()});state.selected=null;say('Volná políčka byla doplněna. Karty můžeš dál přesouvat.');render()});
 $('clear').addEventListener('click',()=>{state.board.forEach(c=>{if(c)state.hand.push(c)});state.board=Array(9).fill(null);state.selected=null;state.aiming=null;say('Karty jsou zpět v ruce.');render()});
 
-function scoringSteps(best,adj){
-  const group=best.group.slice().sort((a,b)=>a-b);
-  const entries=group.map(i=>({i,c:state.board[i],d:defs[state.board[i].id]}));
-  const steps=[];
-  const add=(phase,i,amount,label,source=null)=>{if(amount)steps.push({phase,i,amount,label,source});};
-  // Nejdříve se sečte základní vliv, potom bonusy vlivu.
-  for(const e of entries)add('inf',e.i,e.d.inf,'Základní vliv');
-  const mafias=entries.filter(e=>e.c.id==='mafia');
-  for(const e of entries){
-    if(e.c.id==='vitto')for(const m of mafias)add('inf',m.i,1,'Vitto Vertillo',e.i);
-    if(e.d.target&&e.d.dv){
-      const opts=eligibleTargets(e.i,group,adj);
-      const target=opts.find(j=>state.board[j].uid===state.targets[e.c.uid]);
-      if(target!==undefined)add('inf',target,e.d.dv,e.d.name,e.i);
-    }
-  }
-  // Teprve poté respekt se stejným pořadím: základ + efekty.
-  for(const e of entries)add('res',e.i,e.d.res,'Základní respekt');
-  for(const e of entries){
-    if(e.c.id==='andy')for(const m of mafias)add('res',m.i,1,'Andy Magnus',e.i);
-    if(e.d.bankRes)add('res',e.i,Math.floor(state.bank/100)*e.d.bankRes,e.d.name,e.i);
-    if(e.d.lawyerRes&&entries.some(x=>x.c.id==='george'))add('res',e.i,e.d.lawyerRes,e.d.name,e.i);
-    if(e.d.allAdjRes)for(const j of adj[e.i].filter(j=>group.includes(j)))add('res',j,e.d.allAdjRes,e.d.name,e.i);
-    if(e.d.target&&e.d.dr){
-      const opts=eligibleTargets(e.i,group,adj);
-      const target=opts.find(j=>state.board[j].uid===state.targets[e.c.uid]);
-      if(target!==undefined)add('res',target,e.d.dr,e.d.name,e.i);
-    }
-  }
-  return steps;
-}
+function scoringSteps(best,adj){return buildScoreSteps(best.group,adj)}
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-function scoreNumber(x){return Math.round(x).toLocaleString('cs-CZ')}
+function scoreNumber(x){return Number(x.toFixed(2)).toLocaleString('cs-CZ',{maximumFractionDigits:2})}
 async function animateScoring(best,adj){
   state.animating=true;hideEffect();
   $('reset').disabled=true;$('evaluate').disabled=true;$('clear').disabled=true;
@@ -139,13 +147,13 @@ async function animateScoring(best,adj){
     let lastSource=null;
     for(let step of items){
       if(step.source!==null&&step.source!==lastSource){
-        const origin=document.querySelector('#board .slot[data-i="'+step.source+'"]');
+        const origin=step.source==='contract'?$('contract-slot'):document.querySelector('#board .slot[data-i="'+step.source+'"]');
         if(origin){const effect=document.createElement('span');effect.className='effect-pop';effect.textContent='Efekt!';origin.classList.add('scoring');origin.appendChild(effect);await pause(850);effect.remove();origin.classList.remove('scoring')}
       }
       lastSource=step.source;
-      const slot=document.querySelector('#board .slot[data-i="'+step.i+'"]');
+      const slot=step.i===null?$('contract-slot'):document.querySelector('#board .slot[data-i="'+step.i+'"]');
       const pop=document.createElement('span');pop.className='score-pop '+(phase==='res'?'res':'');
-      pop.textContent='+'+scoreNumber(step.amount);
+      pop.textContent=step.factor?'×'+scoreNumber(step.factor):'+'+scoreNumber(step.amount);
       pop.title=step.label;
       if(slot){slot.classList.add('scoring');slot.appendChild(pop)}
       if(phase==='inf'){inf+=step.amount;$('res-inf').textContent=scoreNumber(inf);$('score-stage-number').textContent=scoreNumber(inf)}
