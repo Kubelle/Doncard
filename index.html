@@ -307,6 +307,7 @@ $('board').addEventListener('click',e=>{let x=e.target.closest('[data-where="boa
   if(state.activeContracts[index])state.discard.push(state.activeContracts[index]);
   state.activeContracts[index]=state.hand.splice(state.selected.i,1)[0];
   state.selected=null;state.aiming=null;hideEffect();
+  if(card.id==='birthday')state.swaps+=2;
   const before=state.hand.length;
   if(handLimit()>9)while(state.hand.length<handLimit()){const next=drawCard();if(!next)break;state.hand.push(next)}
   say('Aktivován kontrakt '+defs[card.id].name+'.'+(state.hand.length>before?' Dolíznuto '+(state.hand.length-before)+' karet.':''));
@@ -381,13 +382,17 @@ function finishEvaluation(best){
     let d=defs[state.board[i].id];
     if(d.after==='money')state.bank+=100;
     if(d.after==='mafia')additions.push('mafia');
-    if(d.after==='weapon')additions.push(['knife','gun','thompson','shotgun'][Math.floor(Math.random()*4)]);
+    if(d.after==='weapon'){const weapons=CATALOG.filter(x=>x.sub==='Zbraň').map(x=>x.id);additions.push(weapons[Math.floor(Math.random()*weapons.length)]);}
   }
   for(let id of additions){let x=newCard(id);state.deck.push(x);state.discard.push(x)}
+  const capos=best.group.filter(i=>isCapo(state.board[i])).length,mafias=best.group.filter(i=>state.board[i].id==='mafia').length;
+  const endBonus=countContracts('familyattack')*10*capos;
+  const bankBonus=countContracts('bankraid')*100+countContracts('extortion')*50*mafias;
+  state.yearScore+=endBonus;state.bank+=bankBonus;
   const extra=(additions.length?' Nové karty: '+additions.map(id=>defs[id].name).join(', ')+'.':'')+(best.group.some(i=>state.board[i].id==='ivan')?' Účetní přidal $100.':'');
   // Nezahrané karty zůstávají v ruce pro další kolo.
   state.discard.push(...state.board.filter(Boolean));state.activeContracts=state.activeContracts.map(c=>{if(c&&defs[c.id].duration==='round'){state.discard.push(c);return null}return c});
-  say(`Vyhodnoceno: ${best.inf} vlivu × ${best.res} respektu = ${best.score} bodů.${extra}`);
+  say(`Vyhodnoceno: ${best.inf} vlivu × ${best.res} respektu = ${best.score} bodů.${extra}`+(endBonus?' Útok na rodinu: +'+endBonus+' vlivu.':'')+(bankBonus?' Kontrakty přidaly $'+bankBonus+'.':''));
   if(state.yearScore>=goal()){showShop();return}
   if(state.round>=roundLimit){showLose();return}
   state.round++;
