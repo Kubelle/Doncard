@@ -30,7 +30,22 @@ const CATALOG=[
 {id:'family',name:'Smlouva s konkurenční rodinou',sub:'Kontrakt · do konce roku',kind:'Kontrakt',inf:0,res:0,edges:[],effect:'Do konce roku +2 k limitu ruky. Už získané karty zůstávají i po nahrazení kontraktu.',start:0,price:260,duration:'year'},
 {id:'cigars',name:'Závoz doutníků z ciziny',sub:'Kontrakt · 1 kolo',kind:'Kontrakt',inf:0,res:0,edges:[],effect:'Efekt kápů se aktivuje 1x navíc.',start:0,price:240,duration:'round'},
 {id:'smuggling',name:'Pašování cigaret',sub:'Kontrakt · 1 kolo',kind:'Kontrakt',inf:0,res:0,edges:[],effect:'Nohsledi ve vyhodnocené kombinaci mají +1 vliv.',start:0,price:200,duration:'round'},
-{id:'heist',name:'Noční vykrádačka',sub:'Kontrakt · 1 kolo',kind:'Kontrakt',inf:0,res:0,edges:[],effect:'Každý Nohsled má +1 vliv za každého Nohsleda v kombinaci.',start:0,price:280,duration:'round'}
+{id:'heist',name:'Noční vykrádačka',sub:'Kontrakt · 1 kolo',kind:'Kontrakt',inf:0,res:0,edges:[],effect:'Každý Nohsled má +1 vliv za každého Nohsleda v kombinaci.',start:0,price:280,duration:'round'},
+// Neurčené symboly, základní hodnoty a ceny jsou prozatímní prototypové nastavení.
+{id:"kamala",name:"Kamala Stavovská",sub:"Kápo",kind:"Postava",inf:0,res:0,edges:["knife","thompson","gun","knife"],effect:"Zbraně v úspěšné kombinaci mají dvojnásobnou účinnost efektu.",start:0,price:280},
+{id:"tommy",name:"Tommy La Ferty",sub:"Kápo",kind:"Postava",inf:0,res:0,edges:["thompson","gun","knife","thompson"],effect:"Zdvojnásobuje účinnost efektu řidiče a vozidel v úspěšné kombinaci.",start:0,price:260},
+{id:"anatolij",name:"Anatolij Ivanovič",sub:"Kápo",kind:"Postava",inf:0,res:0,edges:["gun","knife","gun","whiskey"],effect:"+5 vliv za každou zbraň v úspěšné kombinaci.",start:0,price:290},
+{id:"revolver",name:"Revolver",sub:"Zbraň",kind:"Vybavení",inf:0,res:0,edges:["gun","gun","gun","gun"],effect:"Jeden přímo napojený Nohsled má +5 vliv.",start:0,price:190,target:"mafia",dv:5},
+{id:"molotov",name:"Molotův koktejl",sub:"Zbraň",kind:"Vybavení",inf:0,res:0,edges:["whiskey","whiskey","whiskey","whiskey"],effect:"Jeden přímo napojený Nohsled má ×2 respekt.",start:0,price:220,target:"mafia",multRes:2},
+{id:"grenade",name:"Granát",sub:"Zbraň",kind:"Vybavení",inf:0,res:0,edges:["thompson","thompson","thompson","thompson"],effect:"Jeden přímo napojený Nohsled má +5 respekt.",start:0,price:200,target:"mafia",dr:5},
+{id:"newcapo",name:"Výběr nového Kápa",sub:"Kontrakt · 1 kolo",kind:'Kontrakt',inf:0,res:0,edges:[],effect:"Kápové mají dvojnásobnou účinnost schopností.",start:0,price:280,duration:"round"},
+{id:"bankraid",name:"Bankovní loupež",sub:"Kontrakt · 1 kolo",kind:'Kontrakt',inf:0,res:0,edges:[],effect:"Na konci kola +$100.",start:0,price:190,duration:"round"},
+{id:"familyattack",name:"Útok na konkurenční rodinu",sub:"Kontrakt · 1 kolo",kind:'Kontrakt',inf:0,res:0,edges:[],effect:"Na konci kola +10 vlivu za každého kápa v úspěšné kombinaci.",start:0,price:210,duration:"round"},
+{id:"wedding",name:"Svatba Donovy dcery",sub:"Kontrakt · 1 kolo",kind:'Kontrakt',inf:0,res:0,edges:[],effect:"Na konci kola ×2 celkového respektu za každého kápa v úspěšné kombinaci.",start:0,price:320,duration:"round"},
+{id:"extortion",name:"Výběr výpalného",sub:"Kontrakt · 1 kolo",kind:'Kontrakt',inf:0,res:0,edges:[],effect:"Každý Nohsled v úspěšné kombinaci přidá $50 do banku.",start:0,price:230,duration:"round"},
+{id:"escape",name:"Rychlý únik",sub:"Kontrakt · 1 kolo",kind:'Kontrakt',inf:0,res:0,edges:[],effect:"Každé vozidlo na ruce násobí celkový respekt ×2.",start:0,price:250,duration:"round"},
+{id:"birthday",name:"Narozeninová párty",sub:"Kontrakt · 1 kolo",kind:'Kontrakt',inf:0,res:0,edges:[],effect:"Při zahrání získáš +2 loajality pro výměny v aktuálním kole.",start:0,price:170,duration:"round"},
+{id:"welcome",name:"Vítací ceremoniál",sub:"Kontrakt · do konce roku",kind:'Kontrakt',inf:0,res:0,edges:[],effect:"+1 k maximálnímu počtu karet v ruce po dobu aktivace.",start:0,price:200,duration:"year"}
 ];
 const defs=Object.fromEntries(CATALOG.map(x=>[x.id,x]));let nextUid=1,mafiaCreated=0;
 const MAFIA_ROTATIONS=[0,0,0,1,1,1,2,2,3,3]; // 3 původní, 3 otočené o 90°, 2 o 180°, 2 o 270°.
@@ -45,46 +60,63 @@ function graph(){let adjacency=Array.from({length:9},()=>[]);for(let i=0;i<9;i++
 function groups(adj){let visited=new Set(),out=[];for(let i=0;i<9;i++){if(!state.board[i]||visited.has(i))continue;let group=[],stack=[i];visited.add(i);while(stack.length){const k=stack.pop();group.push(k);adj[k].forEach(j=>{if(!visited.has(j)){visited.add(j);stack.push(j)}})}out.push(group)}return out}
 function eligibleTargets(source,group,adj){return adj[source].filter(i=>group.includes(i)&&(()=>{let d=defs[state.board[source].id],t=defs[state.board[i].id];return !d.target||t.id===d.target})())}
 function hasContract(id){return state.activeContracts.some(c=>c?.id===id)}
-function handLimit(){return hasContract('family')?11:9}
+function handLimit(){return 9+(hasContract('family')?2:0)+countContracts('welcome')}
+function isCapo(c){return !!c&&defs[c.id].sub.startsWith('Kápo')}
+function isWeapon(c){return !!c&&defs[c.id].sub==='Zbraň'}
+function isVehicle(c){return !!c&&defs[c.id].sub==='Vozidlo'}
+function countContracts(id){return state.activeContracts.filter(c=>c?.id===id).length}
 function buildScoreSteps(group,adj){
-  const entries=group.slice().sort((a,b)=>a-b).map(i=>({i,c:state.board[i],d:defs[state.board[i].id]}));
-  const infBy=new Map(entries.map(e=>[e.i,0])),resBy=new Map(entries.map(e=>[e.i,0]));
-  const steps=[],mafias=entries.filter(e=>e.c.id==='mafia'),repeat=1+state.activeContracts.filter(c=>c?.id==='cigars').length;
-  function add(phase,i,amount,label,source=null,factor=null,activation=null){
-    if(!amount)return;
-    steps.push({phase,i,amount,label,source,factor,activation});
-    if(i!==null){const map=phase==='inf'?infBy:resBy;map.set(i,(map.get(i)||0)+amount)}
+ const entries=group.slice().sort((a,b)=>a-b).map(i=>({i,c:state.board[i],d:defs[state.board[i].id]}));
+ const infBy=new Map(entries.map(e=>[e.i,0])),resBy=new Map(entries.map(e=>[e.i,0]));
+ const steps=[],mafias=entries.filter(e=>e.c.id==='mafia'),capos=entries.filter(e=>isCapo(e.c));
+ const triggers=1+countContracts('cigars'),power=2**countContracts('newcapo');
+ const weaponPower=2**(entries.filter(e=>e.c.id==='kamala').length*triggers*power);
+ const vehiclePower=2**(entries.filter(e=>e.c.id==='tommy').length*triggers*power);
+ function add(phase,i,amount,label,source=null,factor=null,activation=null){
+  if(!amount)return;
+  steps.push({phase,i,amount,label,source,factor,activation});
+  if(i!==null){const map=phase==='inf'?infBy:resBy;map.set(i,(map.get(i)||0)+amount)}
+ }
+ const target=e=>{const opts=eligibleTargets(e.i,group,adj);return opts.find(j=>state.board[j].uid===state.targets[e.c.uid])??opts[0]};
+ const strength=e=>isWeapon(e.c)?weaponPower:(isVehicle(e.c)||e.c.id==='kevin')?vehiclePower:1;
+ const weapons=entries.filter(e=>isWeapon(e.c)).length;
+ for(const e of entries)add('inf',e.i,e.d.inf,'Základní vliv');
+ for(const e of entries){
+  if(e.c.id==='vitto')for(let pass=0;pass<triggers;pass++)for(const m of mafias)add('inf',m.i,power,'Vitto Vertillo',e.i,null,'capo-'+e.i+'-'+pass);
+  if(e.c.id==='anatolij')for(let pass=0;pass<triggers;pass++)add('inf',e.i,5*weapons*power,'Anatolij Ivanovič',e.i,null,'capo-'+e.i+'-'+pass);
+  if(e.d.target&&e.d.dv){const t=target(e);if(t!==undefined)add('inf',t,e.d.dv*strength(e),e.d.name,e.i)}
+ }
+ for(const c of state.activeContracts){
+  if(c?.id==='smuggling')for(const m of mafias)add('inf',m.i,1,'Pašování cigaret','contract');
+  if(c?.id==='heist')for(const m of mafias)add('inf',m.i,mafias.length,'Noční vykrádačka','contract');
+ }
+ for(const e of entries)if(e.d.multInf){
+  const t=target(e),factor=e.d.multInf*strength(e);
+  if(t!==undefined)add('inf',t,(infBy.get(t)||0)*(factor-1),e.d.name,e.i,factor)
+ }
+ for(const e of entries)add('res',e.i,e.d.res,'Základní respekt');
+ for(const e of entries){
+  if(e.c.id==='andy')for(let pass=0;pass<triggers;pass++)for(const m of mafias)add('res',m.i,power,'Andy Magnus',e.i,null,'capo-'+e.i+'-'+pass);
+  if(e.d.bankRes)add('res',e.i,Math.floor(state.bank/100)*e.d.bankRes,e.d.name,e.i);
+  if(e.d.lawyerRes&&entries.some(x=>x.c.id==='george'))add('res',e.i,e.d.lawyerRes,e.d.name,e.i);
+  if(e.d.allAdjRes)for(const j of adj[e.i].filter(j=>group.includes(j)))add('res',j,e.d.allAdjRes*strength(e),e.d.name,e.i);
+  if(e.d.target&&e.d.dr){const t=target(e);if(t!==undefined)add('res',t,e.d.dr*strength(e),e.d.name,e.i)}
+ }
+ for(const e of entries)if(e.d.multRes){
+  const t=target(e),factor=e.d.multRes*strength(e);
+  if(t!==undefined)add('res',t,(resBy.get(t)||0)*(factor-1),e.d.name,e.i,factor)
+ }
+ let running=[...resBy.values()].reduce((a,b)=>a+b,0);
+ const multiply=(factor,label)=>{const amount=running*(factor-1);add('res',null,amount,label,'contract',factor);running+=amount};
+ for(const c of state.activeContracts){
+  if(c?.id==='alcohol'){
+   for(let i of group)for(const n of neighbors(i))
+    if(n.index>i&&group.includes(n.index)&&cardEdges(state.board[i])[n.dir]==='whiskey'&&cardEdges(state.board[n.index])[n.other]==='whiskey')multiply(1.5,'Dodávka alkoholu');
   }
-  const targetFor=e=>{let opts=eligibleTargets(e.i,group,adj);return opts.find(j=>state.board[j].uid===state.targets[e.c.uid])??opts[0]};
-  for(const e of entries)add('inf',e.i,e.d.inf,'Základní vliv');
-  for(const e of entries){
-    if(e.c.id==='vitto')for(let pass=0;pass<repeat;pass++)for(const m of mafias)add('inf',m.i,1,'Vitto Vertillo',e.i,null,'capo-'+e.i+'-'+pass);
-    if(e.d.target&&e.d.dv){let t=targetFor(e);if(t!==undefined)add('inf',t,e.d.dv,e.d.name,e.i)}
-  }
-  if(hasContract('smuggling'))for(const m of mafias)add('inf',m.i,1,'Pašování cigaret','contract');
-  if(hasContract('heist'))for(const m of mafias)add('inf',m.i,mafias.length,'Noční vykrádačka','contract');
-  for(const e of entries)if(e.d.multInf){
-    let t=targetFor(e);if(t!==undefined)add('inf',t,(infBy.get(t)||0)*(e.d.multInf-1),e.d.name,e.i,e.d.multInf)
-  }
-  for(const e of entries)add('res',e.i,e.d.res,'Základní respekt');
-  for(const e of entries){
-    if(e.c.id==='andy')for(let pass=0;pass<repeat;pass++)for(const m of mafias)add('res',m.i,1,'Andy Magnus',e.i,null,'capo-'+e.i+'-'+pass);
-    if(e.d.bankRes)add('res',e.i,Math.floor(state.bank/100)*e.d.bankRes,e.d.name,e.i);
-    if(e.d.lawyerRes&&entries.some(x=>x.c.id==='george'))add('res',e.i,e.d.lawyerRes,e.d.name,e.i);
-    if(e.d.allAdjRes)for(const j of adj[e.i].filter(j=>group.includes(j)))add('res',j,e.d.allAdjRes,e.d.name,e.i);
-    if(e.d.target&&e.d.dr){let t=targetFor(e);if(t!==undefined)add('res',t,e.d.dr,e.d.name,e.i)}
-  }
-  for(const e of entries)if(e.d.multRes){
-    let t=targetFor(e);if(t!==undefined)add('res',t,(resBy.get(t)||0)*(e.d.multRes-1),e.d.name,e.i,e.d.multRes)
-  }
-  if(hasContract('alcohol')){
-    const links=[];for(let i of group)for(let n of neighbors(i)){
-      if(n.index>i&&group.includes(n.index)&&cardEdges(state.board[i])[n.dir]==='whiskey'&&cardEdges(state.board[n.index])[n.other]==='whiskey')links.push([i,n.index])
-    }
-    let total=[...resBy.values()].reduce((a,b)=>a+b,0);
-    for(const _ of links){let bonus=total*0.5;add('res',null,bonus,'Dodávka alkoholu','contract',1.5);total+=bonus}
-  }
-  return steps
+  if(c?.id==='wedding')for(const capo of capos)multiply(2,'Svatba Donovy dcery');
+  if(c?.id==='escape')for(const held of state.hand.filter(isVehicle))multiply(2,'Rychlý únik');
+ }
+ return steps;
 }
 function scoreGroup(group,adj){
   const steps=buildScoreSteps(group,adj);
@@ -276,7 +308,7 @@ $('board').addEventListener('click',e=>{let x=e.target.closest('[data-where="boa
   state.activeContracts[index]=state.hand.splice(state.selected.i,1)[0];
   state.selected=null;state.aiming=null;hideEffect();
   const before=state.hand.length;
-  if(hasContract('family'))while(state.hand.length<handLimit()){const next=drawCard();if(!next)break;state.hand.push(next)}
+  if(handLimit()>9)while(state.hand.length<handLimit()){const next=drawCard();if(!next)break;state.hand.push(next)}
   say('Aktivován kontrakt '+defs[card.id].name+'.'+(state.hand.length>before?' Dolíznuto '+(state.hand.length-before)+' karet.':''));
   render();
  }else if(state.activeContracts[index]){
