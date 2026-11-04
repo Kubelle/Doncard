@@ -28,7 +28,7 @@ const CATALOG=[
 {id:'gun',name:'Kolt',sub:'Zbraň',kind:'Vybavení',inf:0,res:0,edges:['gun','gun','gun','gun'],effect:'+2 vliv jednomu přímo napojenému Nohsledovi.',start:0,price:125,target:'mafia',dv:2},
 {id:'alcohol',name:'Dodávka alkoholu',sub:'Kontrakt · 1 kolo',kind:'Kontrakt',inf:0,res:0,edges:[],effect:'Každé platné spojení whiskey ve vyhodnocené skupině násobí celkový respekt ×1,5.',start:0,price:240,duration:'round'},
 {id:'family',name:'Smlouva s konkurenční rodinou',sub:'Kontrakt · do konce roku',kind:'Kontrakt',inf:0,res:0,edges:[],effect:'Do konce roku +2 k limitu ruky. Už získané karty zůstávají i po nahrazení kontraktu.',start:0,price:260,duration:'year'},
-{id:'cigars',name:'Závoz doutníků z ciziny',sub:'Kontrakt · 1 kolo',kind:'Kontrakt',inf:0,res:0,edges:[],effect:'Efekty kapitánů ve vyhodnocené kombinaci se spouští dvakrát.',start:0,price:240,duration:'round'},
+{id:'cigars',name:'Závoz doutníků z ciziny',sub:'Kontrakt · 1 kolo',kind:'Kontrakt',inf:0,res:0,edges:[],effect:'Efekt kápů se aktivuje 1x navíc.',start:0,price:240,duration:'round'},
 {id:'smuggling',name:'Pašování cigaret',sub:'Kontrakt · 1 kolo',kind:'Kontrakt',inf:0,res:0,edges:[],effect:'Nohsledi ve vyhodnocené kombinaci mají +1 vliv.',start:0,price:200,duration:'round'},
 {id:'heist',name:'Noční vykrádačka',sub:'Kontrakt · 1 kolo',kind:'Kontrakt',inf:0,res:0,edges:[],effect:'Každý Nohsled má +1 vliv za každého Nohsleda v kombinaci.',start:0,price:280,duration:'round'}
 ];
@@ -49,16 +49,16 @@ function handLimit(){return hasContract('family')?11:9}
 function buildScoreSteps(group,adj){
   const entries=group.slice().sort((a,b)=>a-b).map(i=>({i,c:state.board[i],d:defs[state.board[i].id]}));
   const infBy=new Map(entries.map(e=>[e.i,0])),resBy=new Map(entries.map(e=>[e.i,0]));
-  const steps=[],mafias=entries.filter(e=>e.c.id==='mafia'),repeat=hasContract('cigars')?2:1;
-  function add(phase,i,amount,label,source=null,factor=null){
+  const steps=[],mafias=entries.filter(e=>e.c.id==='mafia'),repeat=1+state.activeContracts.filter(c=>c?.id==='cigars').length;
+  function add(phase,i,amount,label,source=null,factor=null,activation=null){
     if(!amount)return;
-    steps.push({phase,i,amount,label,source,factor});
+    steps.push({phase,i,amount,label,source,factor,activation});
     if(i!==null){const map=phase==='inf'?infBy:resBy;map.set(i,(map.get(i)||0)+amount)}
   }
   const targetFor=e=>{let opts=eligibleTargets(e.i,group,adj);return opts.find(j=>state.board[j].uid===state.targets[e.c.uid])??opts[0]};
   for(const e of entries)add('inf',e.i,e.d.inf,'Základní vliv');
   for(const e of entries){
-    if(e.c.id==='vitto')for(let pass=0;pass<repeat;pass++)for(const m of mafias)add('inf',m.i,1,'Vitto Vertillo',e.i);
+    if(e.c.id==='vitto')for(let pass=0;pass<repeat;pass++)for(const m of mafias)add('inf',m.i,1,'Vitto Vertillo',e.i,null,'capo-'+e.i+'-'+pass);
     if(e.d.target&&e.d.dv){let t=targetFor(e);if(t!==undefined)add('inf',t,e.d.dv,e.d.name,e.i)}
   }
   if(hasContract('smuggling'))for(const m of mafias)add('inf',m.i,1,'Pašování cigaret','contract');
@@ -68,7 +68,7 @@ function buildScoreSteps(group,adj){
   }
   for(const e of entries)add('res',e.i,e.d.res,'Základní respekt');
   for(const e of entries){
-    if(e.c.id==='andy')for(let pass=0;pass<repeat;pass++)for(const m of mafias)add('res',m.i,1,'Andy Magnus',e.i);
+    if(e.c.id==='andy')for(let pass=0;pass<repeat;pass++)for(const m of mafias)add('res',m.i,1,'Andy Magnus',e.i,null,'capo-'+e.i+'-'+pass);
     if(e.d.bankRes)add('res',e.i,Math.floor(state.bank/100)*e.d.bankRes,e.d.name,e.i);
     if(e.d.lawyerRes&&entries.some(x=>x.c.id==='george'))add('res',e.i,e.d.lawyerRes,e.d.name,e.i);
     if(e.d.allAdjRes)for(const j of adj[e.i].filter(j=>group.includes(j)))add('res',j,e.d.allAdjRes,e.d.name,e.i);
@@ -307,11 +307,12 @@ async function animateScoring(best,adj){
     const items=steps.filter(step=>step.phase===phase);
     let lastSource=null;
     for(let step of items){
-      if(step.source!==null&&step.source!==lastSource){
+      const activation=step.activation??step.source;
+      if(step.source!==null&&activation!==lastSource){
         const origin=step.source==='contract'?document.querySelector('#contract-slots .contract-slot.active'):document.querySelector('#board .slot[data-i="'+step.source+'"]');
         if(origin){const effect=document.createElement('span');effect.className='effect-pop';effect.textContent='Efekt!';origin.classList.add('scoring');origin.appendChild(effect);await pause(850);effect.remove();origin.classList.remove('scoring')}
       }
-      lastSource=step.source;
+      lastSource=activation;
       const slot=step.i===null?document.querySelector('#contract-slots .contract-slot.active'):document.querySelector('#board .slot[data-i="'+step.i+'"]');
       const pop=document.createElement('span');pop.className='score-pop '+(phase==='res'?'res':'');
       pop.textContent=step.factor?'×'+scoreNumber(step.factor):'+'+scoreNumber(step.amount);
