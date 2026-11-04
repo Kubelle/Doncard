@@ -32,9 +32,9 @@ const CATALOG=[
 {id:'smuggling',name:'Pašování cigaret',sub:'Kontrakt · 1 kolo',kind:'Kontrakt',inf:0,res:0,edges:[],effect:'Nohsledi ve vyhodnocené kombinaci mají +1 vliv.',start:0,price:200,duration:'round'},
 {id:'heist',name:'Noční vykrádačka',sub:'Kontrakt · 1 kolo',kind:'Kontrakt',inf:0,res:0,edges:[],effect:'Každý Nohsled má +1 vliv za každého Nohsleda v kombinaci.',start:0,price:280,duration:'round'},
 // Neurčené symboly, základní hodnoty a ceny jsou prozatímní prototypové nastavení.
-{id:"kamala",name:"Kamala Stavovská",sub:"Kápo",kind:"Postava",inf:0,res:0,edges:["knife","thompson","gun","knife"],effect:"Zbraně v úspěšné kombinaci mají dvojnásobnou účinnost efektu.",start:0,price:280},
-{id:"tommy",name:"Tommy La Ferty",sub:"Kápo",kind:"Postava",inf:0,res:0,edges:["thompson","gun","knife","thompson"],effect:"Zdvojnásobuje účinnost efektu řidiče a vozidel v úspěšné kombinaci.",start:0,price:260},
-{id:"anatolij",name:"Anatolij Ivanovič",sub:"Kápo",kind:"Postava",inf:0,res:0,edges:["gun","knife","gun","whiskey"],effect:"+5 vliv za každou zbraň v úspěšné kombinaci.",start:0,price:290},
+{id:"kamala",name:"Kamala Stavovská",sub:"Kápo",kind:"Postava",inf:3,res:3,edges:["knife","thompson","gun","knife"],effect:"Zbraně v úspěšné kombinaci mají dvojnásobnou účinnost efektu.",start:0,price:280},
+{id:"tommy",name:"Tommy La Ferty",sub:"Kápo",kind:"Postava",inf:3,res:3,edges:["thompson","gun","knife","thompson"],effect:"Zdvojnásobuje účinnost efektu řidiče a vozidel v úspěšné kombinaci.",start:0,price:260},
+{id:"anatolij",name:"Anatolij Ivanovič",sub:"Kápo",kind:"Postava",inf:3,res:3,edges:["gun","knife","gun","whiskey"],effect:"+5 vliv za každou zbraň v úspěšné kombinaci.",start:0,price:290},
 {id:"revolver",name:"Revolver",sub:"Zbraň",kind:"Vybavení",inf:0,res:0,edges:["gun","gun","gun","gun"],effect:"Jeden přímo napojený Nohsled má +5 vliv.",start:0,price:190,target:"mafia",dv:5},
 {id:"molotov",name:"Molotův koktejl",sub:"Zbraň",kind:"Vybavení",inf:0,res:0,edges:["whiskey","whiskey","whiskey","whiskey"],effect:"Jeden přímo napojený Nohsled má ×2 respekt.",start:0,price:220,target:"mafia",multRes:2},
 {id:"grenade",name:"Granát",sub:"Zbraň",kind:"Vybavení",inf:0,res:0,edges:["thompson","thompson","thompson","thompson"],effect:"Jeden přímo napojený Nohsled má +5 respekt.",start:0,price:200,target:"mafia",dr:5},
